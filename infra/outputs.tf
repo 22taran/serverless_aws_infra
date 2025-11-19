@@ -23,8 +23,3 @@ output "dynamodb_table_name" {
   value       = module.database.table_name
 }
 
-output "codepipeline_name" {
-  description = "CodePipeline name"
-  value       = module.cicd.pipeline_name
-}
-

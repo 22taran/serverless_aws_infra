@@ -68,6 +68,10 @@ resource "aws_cloudfront_distribution" "frontend" {
   default_root_object = "index.html"
   comment             = "${var.project_name}-${var.environment}-frontend"
 
+  lifecycle {
+    ignore_changes = [web_acl_id]
+  }
+
   origin {
     domain_name              = aws_s3_bucket.frontend.bucket_regional_domain_name
     origin_id                = "S3-${aws_s3_bucket.frontend.bucket}"
@@ -80,58 +84,28 @@ resource "aws_cloudfront_distribution" "frontend" {
     target_origin_id       = "S3-${aws_s3_bucket.frontend.bucket}"
     compress               = true
     viewer_protocol_policy = "redirect-to-https"
-
-    forwarded_values {
-      query_string = false
-      cookies {
-        forward = "none"
-      }
-    }
-
-    min_ttl     = 0
-    default_ttl = 3600
-    max_ttl     = 86400
+    cache_policy_id        = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # Managed-CachingOptimized
   }
 
   # Cache behavior for static assets
   ordered_cache_behavior {
-    path_pattern     = "*.js"
-    allowed_methods  = ["GET", "HEAD", "OPTIONS"]
-    cached_methods   = ["GET", "HEAD"]
-    target_origin_id = "S3-${aws_s3_bucket.frontend.bucket}"
-    compress         = true
-
-    forwarded_values {
-      query_string = false
-      cookies {
-        forward = "none"
-      }
-    }
-
+    path_pattern           = "*.js"
+    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+    cached_methods         = ["GET", "HEAD"]
+    target_origin_id       = "S3-${aws_s3_bucket.frontend.bucket}"
+    compress               = true
     viewer_protocol_policy = "redirect-to-https"
-    min_ttl               = 0
-    default_ttl           = 86400
-    max_ttl               = 31536000
+    cache_policy_id        = "658327ea-f89d-4fab-a63d-7e88639e58f6" # Managed-CachingOptimizedForUncompressedObjects
   }
 
   ordered_cache_behavior {
-    path_pattern     = "*.css"
-    allowed_methods  = ["GET", "HEAD", "OPTIONS"]
-    cached_methods   = ["GET", "HEAD"]
-    target_origin_id = "S3-${aws_s3_bucket.frontend.bucket}"
-    compress         = true
-
-    forwarded_values {
-      query_string = false
-      cookies {
-        forward = "none"
-      }
-    }
-
+    path_pattern           = "*.css"
+    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+    cached_methods         = ["GET", "HEAD"]
+    target_origin_id       = "S3-${aws_s3_bucket.frontend.bucket}"
+    compress               = true
     viewer_protocol_policy = "redirect-to-https"
-    min_ttl               = 0
-    default_ttl           = 86400
-    max_ttl               = 31536000
+    cache_policy_id        = "658327ea-f89d-4fab-a63d-7e88639e58f6" # Managed-CachingOptimizedForUncompressedObjects
   }
 
   restrictions {

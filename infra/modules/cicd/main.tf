@@ -35,7 +35,10 @@ resource "aws_codebuild_project" "frontend" {
   service_role  = var.cicd_role_arn
 
   artifacts {
-    type = "CODEPIPELINE"
+    type = "S3"
+    location = aws_s3_bucket.artifacts.bucket
+    name     = "frontend-build"
+    packaging = "NONE"
   }
 
   environment {
@@ -54,11 +57,66 @@ resource "aws_codebuild_project" "frontend" {
       name  = "CLOUDFRONT_DISTRIBUTION_ID"
       value = var.cloudfront_distribution_id
     }
+
+    environment_variable {
+      name  = "API_GATEWAY_URL"
+      value = var.api_gateway_url
+    }
   }
 
   source {
-    type = "CODEPIPELINE"
-    buildspec = "buildspec-frontend.yml"
+    type = "NO_SOURCE"
+    buildspec = <<-EOT
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - echo Preparing static website...
+      - cd app/frontend
+      - echo "Creating deployment directory..."
+      - mkdir -p dist
+  build:
+    commands:
+      - echo Build started on `date`
+      - echo Copying static HTML file...
+      - cp index.html dist/
+      - |
+        if [ -n "$$API_GATEWAY_URL" ]; then
+          echo "Injecting API URL: $$API_GATEWAY_URL"
+          sed -i "s|https://YOUR_API_GATEWAY_URL.execute-api.us-east-1.amazonaws.com/dev|$$API_GATEWAY_URL|g" dist/index.html
+        fi
+      - echo "Static website ready"
+      - echo Build completed on `date`
+  post_build:
+    commands:
+      - echo Build phase completed
+      - echo Deploying to S3...
+      - echo "S3_BUCKET=$$S3_BUCKET"
+      - echo "CLOUDFRONT_DISTRIBUTION_ID=$$CLOUDFRONT_DISTRIBUTION_ID"
+      - |
+        if [ -n "$$S3_BUCKET" ]; then
+          echo "Syncing files to S3 bucket: $$S3_BUCKET"
+          aws s3 sync dist/ s3://$$S3_BUCKET/ --delete
+          echo "Files deployed to S3 successfully"
+        else
+          echo "Warning: S3_BUCKET not set, skipping S3 deployment"
+        fi
+      - |
+        if [ -n "$$CLOUDFRONT_DISTRIBUTION_ID" ]; then
+          echo "Invalidating CloudFront cache..."
+          aws cloudfront create-invalidation \
+            --distribution-id $$CLOUDFRONT_DISTRIBUTION_ID \
+            --paths "/*"
+          echo "CloudFront cache invalidated successfully"
+        else
+          echo "Warning: CLOUDFRONT_DISTRIBUTION_ID not set, skipping cache invalidation"
+        fi
+artifacts:
+  files:
+    - '**/*'
+  base-directory: app/frontend/dist
+EOT
   }
 
   tags = var.tags
@@ -72,7 +130,10 @@ resource "aws_codebuild_project" "backend" {
   service_role  = var.cicd_role_arn
 
   artifacts {
-    type = "CODEPIPELINE"
+    type      = "S3"
+    location  = aws_s3_bucket.artifacts.bucket
+    name      = "backend-build"
+    packaging = "NONE"
   }
 
   environment {
@@ -93,101 +154,50 @@ resource "aws_codebuild_project" "backend" {
   }
 
   source {
-    type = "CODEPIPELINE"
-    buildspec = "buildspec-backend.yml"
+    type = "NO_SOURCE"
+    buildspec = <<-EOT
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - echo Installing Node.js dependencies...
+      - cd app/backend
+      - npm install
+      - echo Dependencies installed
+  build:
+    commands:
+      - echo Build started on `date`
+      - echo Packaging Lambda functions...
+      - |
+        for func in getTasks createTask updateTask deleteTask; do
+          echo "Packaging $$func..."
+          zip -j $$func.zip $$func.js
+          zip -r $$func.zip node_modules/
+          echo "$$func packaged successfully"
+        done
+      - echo Build completed on `date`
+  post_build:
+    commands:
+      - echo Deploying Lambda functions...
+      - |
+        for func in getTasks createTask updateTask deleteTask; do
+          echo "Updating $$func..."
+          aws lambda update-function-code \
+            --function-name $${func} \
+            --zip-file fileb://$$func.zip || echo "Function $$func may not exist yet"
+        done
+      - echo Deployment completed
+artifacts:
+  files:
+    - '**/*.zip'
+  base-directory: app/backend
+EOT
   }
 
   tags = var.tags
 }
 
-
-# CodePipeline
-resource "aws_codepipeline" "this" {
-  count    = var.github_repo != "" ? 1 : 0
-  name     = "${var.project_name}-${var.environment}-pipeline"
-  role_arn = var.codepipeline_role_arn
-
-  artifact_store {
-    location = aws_s3_bucket.artifacts.bucket
-    type     = "S3"
-  }
-
-  stage {
-    name = "Source"
-
-    action {
-      name             = "Source"
-      category         = "Source"
-      owner            = "AWS"
-      provider         = "CodeStarSourceConnection"
-      version          = "1"
-      output_artifacts = ["source_output"]
-
-      configuration = {
-        ConnectionArn    = aws_codestarconnections_connection.github[0].arn
-        FullRepositoryId = var.github_repo
-        BranchName       = var.github_branch
-      }
-    }
-  }
-
-  stage {
-    name = "BuildFrontend"
-
-    action {
-      name             = "Build"
-      category         = "Build"
-      owner            = "AWS"
-      provider         = "CodeBuild"
-      input_artifacts  = ["source_output"]
-      output_artifacts = ["frontend_build"]
-      version          = "1"
-
-      configuration = {
-        ProjectName = aws_codebuild_project.frontend.name
-      }
-    }
-  }
-
-  stage {
-    name = "BuildBackend"
-
-    action {
-      name             = "Build"
-      category         = "Build"
-      owner            = "AWS"
-      provider         = "CodeBuild"
-      input_artifacts  = ["source_output"]
-      output_artifacts = ["backend_build"]
-      version          = "1"
-
-      configuration = {
-        ProjectName = aws_codebuild_project.backend.name
-      }
-    }
-  }
-
-  stage {
-    name = "DeployFrontend"
-
-    action {
-      name            = "Deploy"
-      category        = "Deploy"
-      owner           = "AWS"
-      provider        = "S3"
-      input_artifacts = ["frontend_build"]
-      version         = "1"
-
-      configuration = {
-        BucketName = var.s3_bucket_name
-        Extract    = "true"
-      }
-    }
-  }
-
-
-  tags = var.tags
-}
 
 # GitHub Connection (CodeStar Connections)
 resource "aws_codestarconnections_connection" "github" {

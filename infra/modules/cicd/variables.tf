@@ -35,6 +35,12 @@ variable "api_gateway_id" {
   type        = string
 }
 
+variable "api_gateway_url" {
+  description = "API Gateway URL"
+  type        = string
+  default     = ""
+}
+
 variable "lambda_functions" {
   description = "Map of Lambda functions"
   type = map(object({
@@ -48,11 +54,6 @@ variable "lambda_functions" {
 
 variable "cicd_role_arn" {
   description = "CI/CD role ARN (CodeBuild)"
-  type        = string
-}
-
-variable "codepipeline_role_arn" {
-  description = "CodePipeline role ARN"
   type        = string
 }
 

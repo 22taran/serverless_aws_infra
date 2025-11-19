@@ -164,6 +164,10 @@ resource "aws_cloudwatch_metric_alarm" "api_5xx_errors" {
     ApiName = "${var.project_name}-${var.environment}-api"
   }
 
+  lifecycle {
+    create_before_destroy = true
+  }
+
   tags = var.tags
 }
 

@@ -67,9 +67,9 @@ module "cicd" {
   s3_bucket_name         = module.frontend.s3_bucket_name
   cloudfront_distribution_id = module.frontend.cloudfront_distribution_id
   api_gateway_id         = module.api.api_gateway_id
+  api_gateway_url         = module.api.api_gateway_url
   lambda_functions       = module.lambda.functions
   cicd_role_arn          = module.iam.cicd_role_arn
-  codepipeline_role_arn  = module.iam.codepipeline_role_arn
   tags                   = local.common_tags
 }
 

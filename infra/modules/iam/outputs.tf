@@ -13,8 +13,3 @@ output "cicd_role_arn" {
   value       = aws_iam_role.codebuild.arn
 }
 
-output "codepipeline_role_arn" {
-  description = "CodePipeline role ARN"
-  value       = aws_iam_role.codepipeline.arn
-}
-
