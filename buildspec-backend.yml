@@ -1,0 +1,37 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - echo Installing Node.js dependencies...
+      - cd app/backend
+      - npm install
+      - echo Dependencies installed
+  build:
+    commands:
+      - echo Build started on `date`
+      - echo Packaging Lambda functions...
+      - |
+        for func in getTasks createTask updateTask deleteTask; do
+          echo "Packaging $func..."
+          zip -j $func.zip $func.js
+          zip -r $func.zip node_modules/
+          echo "$func packaged successfully"
+        done
+      - echo Build completed on `date`
+  post_build:
+    commands:
+      - echo Deploying Lambda functions...
+      - |
+        for func in getTasks createTask updateTask deleteTask; do
+          echo "Updating $func..."
+          aws lambda update-function-code \
+            --function-name ${func} \
+            --zip-file fileb://$func.zip || echo "Function $func may not exist yet"
+        done
+      - echo Deployment completed
+artifacts:
+  files:
+    - '**/*.zip'
+  base-directory: app/backend
+

@@ -1,0 +1,21 @@
+{
+  "name": "serverless-todo-backend",
+  "version": "1.0.0",
+  "description": "Serverless TODO Backend Lambda Functions",
+  "main": "index.js",
+  "scripts": {
+    "package": "npm run package:getTasks && npm run package:createTask && npm run package:updateTask && npm run package:deleteTask",
+    "package:getTasks": "zip -j getTasks.zip getTasks.js node_modules/",
+    "package:createTask": "zip -j createTask.zip createTask.js node_modules/",
+    "package:updateTask": "zip -j updateTask.zip updateTask.js node_modules/",
+    "package:deleteTask": "zip -j deleteTask.zip deleteTask.js node_modules/"
+  },
+  "dependencies": {
+    "aws-sdk": "^2.1500.0",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {},
+  "author": "",
+  "license": "MIT"
+}
+
